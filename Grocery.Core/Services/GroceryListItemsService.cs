@@ -51,7 +51,42 @@ namespace Grocery.Core.Services
 
         public List<BestSellingProducts> GetBestSellingProducts(int topX = 5)
         {
-            throw new NotImplementedException();
+            //pak producten bij id met een LINQ query en limiteer het tot top x
+            var productsBySales = _groceriesRepository.GetAll()
+            .GroupBy(i => i.ProductId)
+            .Select(g => new { ProductId = g.Key, TotalSold = g.Sum(i => i.Amount) })
+            .OrderByDescending(x => x.TotalSold)
+            .ThenBy(x => x.ProductId)
+            .Take(topX)
+            .ToList();
+
+            var sortedIds = productsBySales
+            .Select(s => s.ProductId)
+            .ToHashSet();
+
+            var productsById = _productRepository.GetAll()
+            .Where(p => sortedIds.Contains(p.Id))
+            .ToDictionary(p => p.Id);
+
+            // maak het een mooi lijstje voor de frontend
+            var bestSellers = productsBySales
+                .Select((s, index) =>
+                {
+                    var product = productsById.GetValueOrDefault(s.ProductId)
+                               ?? new Product(0, "Onbekend", 0);
+
+                    return new BestSellingProducts(
+                        product.Id,
+                        product.Name,
+                        product.Stock,
+                        s.TotalSold,
+                        index + 1
+                    );
+                })
+                .ToList();
+
+            return bestSellers;
+
         }
 
         private void FillService(List<GroceryListItem> groceryListItems)
